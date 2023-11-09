@@ -1,5 +1,8 @@
+cloudpickle
 dvc
 dvc-azure
 jupyter
 numpy
+openai
+scikit-learn
 wandb

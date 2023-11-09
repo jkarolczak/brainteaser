@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from random import shuffle
 from textwrap import dedent
+from typing import Optional
 
 import numpy as np
 
@@ -17,10 +18,17 @@ _sp_keys_map = {
 class EvaluationInstance:
     question: str
     choice_list: list[str]
+    embedding: Optional[list[float]] = None
 
     @staticmethod
     def from_dict(dictionary: dict[str, str | list[str]]) -> EvaluationInstance:
         return EvaluationInstance(**dictionary)
+
+    def embed(self) -> None:
+        from openai import OpenAI
+
+        response = OpenAI().embeddings.create(input=self.question, model="text-embedding-ada-002")
+        self.embedding = response.data[0].embedding
 
     def __repr__(self) -> str:
         return dedent(f"""\
@@ -69,12 +77,31 @@ class DataSet:
     @staticmethod
     def from_array(array: np.ndarray, shuffle: bool = False) -> DataSet:
         instance_class = Instance if "answer" in array[0].keys() else EvaluationInstance
-        return DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
+        dataset = DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
+        dataset.shuffle = shuffle
+        return dataset
 
     @staticmethod
     def from_file(path: str, shuffle: bool = False) -> DataSet:
-        array = np.load(path, allow_pickle=True)
-        return DataSet.from_array(array, shuffle)
+        if ".npy" in path:
+            array = np.load(path, allow_pickle=True)
+            return DataSet.from_array(array, shuffle)
+        if ".pkl" in path:
+            import cloudpickle as pickle
+
+            with open(path, "rb") as fp:
+                dataset = pickle.load(fp)
+                dataset.shuffle = shuffle
+                return dataset
+
+    @staticmethod
+    def to_file(dataset: DataSet, path: str = "./dataset.pkl") -> None:
+        import cloudpickle as pickle
+
+        if ".pkl" not in path:
+            path += ".pkl"
+        with open(path, "wb") as fp:
+            pickle.dump(dataset, fp)
 
     def __iter__(self) -> DataSet:
         self._iter_idx = -1
