@@ -13,38 +13,7 @@ _sp_keys_map = {
 }
 
 
-@dataclass
-class Instance:
-    id: str
-    question: str
-    answer: str
-    distractor_1: str
-    distractor_2: str
-    distractor_unsure: str
-    label: int
-    choice_list: list[str]
-    choice_order: list[int]
-
-    @staticmethod
-    def from_dict(dictionary: dict[str, int | str | list[int] | list[str]]) -> Instance:
-        dictionary = dictionary.copy()
-        dictionary["question"] = dictionary["question"].replace("/n", " ")
-        for old, new in _sp_keys_map.items():
-            dictionary[new] = dictionary[old]
-            del dictionary[old]
-        return Instance(**dictionary)
-
-    def __repr__(self) -> str:
-        return dedent(f"""\
-            Question: {self.question}
-            A (correct): {self.answer}
-            B: {self.distractor_1}
-            C: {self.distractor_2}
-            D (unsure): {self.distractor_unsure}\
-        """)
-
-
-@dataclass
+@dataclass(kw_only=True)
 class EvaluationInstance:
     question: str
     choice_list: list[str]
@@ -63,20 +32,49 @@ class EvaluationInstance:
             """)
 
 
+@dataclass(kw_only=True)
+class Instance(EvaluationInstance):
+    id: str
+    answer: str
+    distractor_1: str
+    distractor_2: str
+    distractor_unsure: str
+    label: int
+    choice_order: list[int]
+
+    @staticmethod
+    def from_dict(dictionary: dict[str, int | str | list[int] | list[str]]) -> Instance:
+        dictionary = dictionary.copy()
+        dictionary["question"] = dictionary["question"].replace("\n", " ")
+        for old, new in _sp_keys_map.items():
+            dictionary[new] = dictionary[old]
+            del dictionary[old]
+        return Instance(**dictionary)
+
+    def __repr__(self) -> str:
+        return dedent(f"""\
+            Question: {self.question}
+            A (correct): {self.answer}
+            B: {self.distractor_1}
+            C: {self.distractor_2}
+            D (unsure): {self.distractor_unsure}\
+        """)
+
+
 @dataclass
 class DataSet:
     instances: list[Instance]
     shuffle: bool = False
 
     @staticmethod
-    def from_array(array: np.ndarray, shuffle: bool = False, evaluation: bool = False) -> DataSet:
-        instance_class = Instance if not evaluation else EvaluationInstance
+    def from_array(array: np.ndarray, shuffle: bool = False) -> DataSet:
+        instance_class = Instance if "answer" in array[0].keys() else EvaluationInstance
         return DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
 
     @staticmethod
-    def from_file(path: str, shuffle: bool = False, evaluation: bool = False) -> DataSet:
+    def from_file(path: str, shuffle: bool = False) -> DataSet:
         array = np.load(path, allow_pickle=True)
-        return DataSet.from_array(array, shuffle, evaluation)
+        return DataSet.from_array(array, shuffle)
 
     def __iter__(self) -> DataSet:
         self._iter_idx = -1
