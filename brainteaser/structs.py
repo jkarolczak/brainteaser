@@ -45,18 +45,38 @@ class Instance:
 
 
 @dataclass
+class EvaluationInstance:
+    question: str
+    choice_list: list[str]
+
+    @staticmethod
+    def from_dict(dictionary: dict[str, str | list[str]]) -> EvaluationInstance:
+        return EvaluationInstance(**dictionary)
+
+    def __repr__(self) -> str:
+        return dedent(f"""\
+                Question: {self.question}
+                A: {self.choice_list[0]}
+                B: {self.choice_list[1]}
+                C: {self.choice_list[2]}
+                D: {self.choice_list[3]}\
+            """)
+
+
+@dataclass
 class DataSet:
     instances: list[Instance]
     shuffle: bool = False
 
     @staticmethod
-    def from_array(array: np.ndarray, shuffle: bool = False) -> DataSet:
-        return DataSet(instances=list(map(lambda x: Instance.from_dict(x), array)), shuffle=shuffle)
+    def from_array(array: np.ndarray, shuffle: bool = False, evaluation: bool = False) -> DataSet:
+        instance_class = Instance if not evaluation else EvaluationInstance
+        return DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
 
     @staticmethod
-    def from_file(path: str, shuffle: bool = False) -> DataSet:
+    def from_file(path: str, shuffle: bool = False, evaluation: bool = False) -> DataSet:
         array = np.load(path, allow_pickle=True)
-        return DataSet.from_array(array, shuffle)
+        return DataSet.from_array(array, shuffle, evaluation)
 
     def __iter__(self) -> DataSet:
         self._iter_idx = -1
@@ -65,7 +85,7 @@ class DataSet:
             shuffle(self._iter_instances)
         return self
 
-    def __next__(self) -> Instance:
+    def __next__(self) -> Instance | EvaluationInstance:
         self._iter_idx += 1
         if self._iter_idx >= self.__len__():
             raise StopIteration
@@ -77,5 +97,5 @@ class DataSet:
     def __len__(self) -> int:
         return len(self.instances)
 
-    def __getitem__(self, item: int) -> Instance:
+    def __getitem__(self, item: int) -> Instance | EvaluationInstance:
         return self.instances[item]
