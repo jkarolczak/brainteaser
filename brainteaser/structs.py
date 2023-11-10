@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
-from random import shuffle
 from textwrap import dedent
 from typing import Optional
 
@@ -103,11 +103,15 @@ class DataSet:
         with open(path, "wb") as fp:
             pickle.dump(dataset, fp)
 
+    def shuffle_instances(self) -> DataSet:
+        random.shuffle(self.instances)
+        return self
+
     def __iter__(self) -> DataSet:
         self._iter_idx = -1
         self._iter_instances = self.instances.copy()
         if self.shuffle:
-            shuffle(self._iter_instances)
+            rabdom.shuffle(self._iter_instances)
         return self
 
     def __next__(self) -> Instance | EvaluationInstance:
