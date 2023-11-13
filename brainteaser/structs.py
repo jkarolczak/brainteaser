@@ -15,14 +15,14 @@ _sp_keys_map = {
 
 
 @dataclass(kw_only=True)
-class EvaluationInstance:
+class Instance:
     question: str
     choice_list: list[str]
     embedding: Optional[list[float]] = None
 
     @staticmethod
-    def from_dict(dictionary: dict[str, str | list[str]]) -> EvaluationInstance:
-        return EvaluationInstance(**dictionary)
+    def from_dict(dictionary: dict[str, str | list[str]]) -> Instance:
+        return Instance(**dictionary)
 
     def embed(self) -> None:
         from openai import OpenAI
@@ -41,7 +41,7 @@ class EvaluationInstance:
 
 
 @dataclass(kw_only=True)
-class Instance(EvaluationInstance):
+class TrainingInstance(Instance):
     id: str
     answer: str
     distractor_1: str
@@ -51,13 +51,16 @@ class Instance(EvaluationInstance):
     choice_order: list[int]
 
     @staticmethod
-    def from_dict(dictionary: dict[str, int | str | list[int] | list[str]]) -> Instance:
+    def from_dict(dictionary: dict[str, int | str | list[int] | list[str]]) -> TrainingInstance:
         dictionary = dictionary.copy()
         dictionary["question"] = dictionary["question"].replace("\n", " ")
         for old, new in _sp_keys_map.items():
             dictionary[new] = dictionary[old]
             del dictionary[old]
-        return Instance(**dictionary)
+        return TrainingInstance(**dictionary)
+
+    def is_answer_correct(self, idx: int) -> bool:
+        return idx == self.choice_order.index(0)
 
     def __repr__(self) -> str:
         return dedent(f"""\
@@ -71,12 +74,12 @@ class Instance(EvaluationInstance):
 
 @dataclass
 class DataSet:
-    instances: list[Instance]
+    instances: list[TrainingInstance]
     shuffle: bool = False
 
     @staticmethod
     def from_array(array: np.ndarray, shuffle: bool = False) -> DataSet:
-        instance_class = Instance if "answer" in array[0].keys() else EvaluationInstance
+        instance_class = TrainingInstance if "answer" in array[0].keys() else Instance
         dataset = DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
         dataset.shuffle = shuffle
         return dataset
@@ -114,7 +117,7 @@ class DataSet:
             rabdom.shuffle(self._iter_instances)
         return self
 
-    def __next__(self) -> Instance | EvaluationInstance:
+    def __next__(self) -> TrainingInstance | Instance:
         self._iter_idx += 1
         if self._iter_idx >= self.__len__():
             raise StopIteration
@@ -126,5 +129,5 @@ class DataSet:
     def __len__(self) -> int:
         return len(self.instances)
 
-    def __getitem__(self, item: int) -> Instance | EvaluationInstance:
+    def __getitem__(self, item: int) -> TrainingInstance | Instance:
         return self.instances[item]
