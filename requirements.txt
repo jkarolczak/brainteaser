@@ -5,4 +5,5 @@ jupyter
 numpy
 openai
 scikit-learn
+tqdm
 wandb

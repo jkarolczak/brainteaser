@@ -59,8 +59,12 @@ class TrainingInstance(Instance):
             del dictionary[old]
         return TrainingInstance(**dictionary)
 
-    def is_answer_correct(self, idx: int) -> bool:
-        return idx == self.choice_order.index(0)
+    @property
+    def answer_idx(self) -> int:
+        return self.choice_order.index(0)
+
+    def is_choice_correct(self, idx: int) -> bool:
+        return idx == self.answer_idx
 
     def __repr__(self) -> str:
         return dedent(f"""\
@@ -74,15 +78,17 @@ class TrainingInstance(Instance):
 
 @dataclass
 class DataSet:
-    instances: list[TrainingInstance]
+    instances: list[Instance]
     shuffle: bool = False
 
     @staticmethod
     def from_array(array: np.ndarray, shuffle: bool = False) -> DataSet:
         instance_class = TrainingInstance if "answer" in array[0].keys() else Instance
-        dataset = DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
-        dataset.shuffle = shuffle
-        return dataset
+        return DataSet(instances=list(map(lambda x: instance_class.from_dict(x), array)), shuffle=shuffle)
+
+    @staticmethod
+    def from_list(list_: list[Instance], shuffle: bool = False) -> DataSet:
+        return DataSet(instances=list_, shuffle=shuffle)
 
     @staticmethod
     def from_file(path: str, shuffle: bool = False) -> DataSet:
@@ -109,6 +115,13 @@ class DataSet:
     def shuffle_instances(self) -> DataSet:
         random.shuffle(self.instances)
         return self
+
+    @property
+    def correct_answers(self) -> list[int]:
+        try:
+            return [instance.answer_idx for instance in self.instances]
+        except:
+            raise RuntimeError("A list of correct answers can be generated only for DataSet with TrainingInstances")
 
     def __iter__(self) -> DataSet:
         self._iter_idx = -1

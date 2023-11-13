@@ -1,13 +1,18 @@
+import re
 from abc import ABC, abstractmethod
+
+from tqdm.auto import tqdm
 
 from structs import DataSet, Instance
 
 
 class Solver(ABC):
-    def solve(self, x: DataSet | Instance) -> int | list[int]:
+    def solve(self, x: DataSet | Instance, show_progress: bool = True) -> int | list[int]:
         if isinstance(x, Instance):
             return self.solve_instance(x)
         if isinstance(x, DataSet):
+            if show_progress:
+                return [self.solve_instance(i) for i in tqdm(x)]
             return [self.solve_instance(i) for i in x]
         raise TypeError("An input has to be Instance of DataSet")
 
@@ -17,14 +22,15 @@ class Solver(ABC):
 
 
 class ZeroShotGPT(Solver):
-    def __init__(self):
+    def __init__(self, model_name: str = "gpt-3.5-turbo"):
+        self.model_name = model_name
         from openai import OpenAI
 
-        self.client = OpenAI()
+        self.client_cls = OpenAI
         self.messages = [
             {
                 "role": "system",
-                "content": "Solve the brain teaser. Return only the number corresponding to the correct answer."
+                "content": "Solve the brain teaser. Return only the number assigned to the correct answer."
             }
         ]
 
@@ -39,7 +45,12 @@ class ZeroShotGPT(Solver):
             }
         ]
 
-        print(instance.__dir__())
-        answer = 0
-        print(instance.is_answer_correct(answer))
-        return 1
+        response = self.client_cls().chat.completions.create(
+            model=self.model_name,
+            messages=messages
+        )
+
+        full_answer = response.choices[0].message.content
+        num_answer = int(re.compile(r"\d+").match(full_answer).group(0))
+
+        return num_answer
