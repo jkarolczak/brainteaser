@@ -8,4 +8,4 @@ for full_path in glob("./data/*.npy"):
     for idx, _ in enumerate(dataset):
         dataset[idx].embed()
     dataset_name = os.path.splitext(os.path.split(full_path)[-1])[0]
-    DataSet.to_file(dataset=dataset, path=os.path.join("../data", f"{dataset_name}.pkl"))
+    DataSet.to_file(dataset=dataset, path=os.path.join("./data", f"{dataset_name}.pkl"))
