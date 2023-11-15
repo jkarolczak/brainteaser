@@ -36,8 +36,6 @@ class ZeroShotGPT(Solver):
         ]
 
     def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
-        if not retry_counter:
-            raise RuntimeError("The number of maximum retries has been reached.")
         content = "QUESTION:\n" + instance.question + "\n" + "\n".join(
             [f"{i}) {choice}" for i, choice in enumerate(instance.choice_list)]
         ) + "\nANSWER: "
@@ -57,6 +55,8 @@ class ZeroShotGPT(Solver):
             num_answer = int(re.compile(r"\d+").match(full_answer).group(0))
 
             return num_answer
-        except:
-            print("An error occurred during generating response. Retrying...")
-            return self.solve_instance(instance, retry_counter=retry_counter - 1)
+        except Exception as e:
+            if retry_counter > 1:
+                print("An error occurred during generating response. Retrying...")
+                return self.solve_instance(instance, retry_counter=retry_counter - 1)
+            raise RuntimeError("The number of maximum retries has been reached.") from e
