@@ -1,5 +1,6 @@
 import re
 from abc import ABC, abstractmethod
+from enum import Enum
 
 from tqdm.auto import tqdm
 
@@ -23,6 +24,7 @@ class Solver(ABC):
 
 class ZeroShotGPT(Solver):
     def __init__(self, model_name: str = "gpt-3.5-turbo"):
+        super().__init__()
         self.model_name = model_name
         from openai import OpenAI
 
@@ -60,3 +62,28 @@ class ZeroShotGPT(Solver):
                 print("An error occurred during generating response. Retrying...")
                 return self.solve_instance(instance, retry_counter=retry_counter - 1)
             raise RuntimeError("The number of maximum retries has been reached.") from e
+
+
+class ContextAwareZeroShotGPT(ZeroShotGPT):
+    class Context(Enum):
+        SENTENCE = "sentence"
+        WORD = "word"
+
+    def __init__(self, context: Context, model_name: str = "gpt-3.5-turbo"):
+        super().__init__(model_name=model_name)
+        match context:
+            case self.Context.SENTENCE:
+                description = "Solve brain teaser where the puzzle defying commonsense is centered on sentence snippets"
+            case self.Context.WORD:
+                description = ("Solve brain teaser where the answer violates the default meaning of the word and "
+                               "focuses on the letter composition of the target question")
+            case _:
+                raise ValueError("The context type has to be one of ContextAwareZeroshotGPT.Context")
+
+        self.messages = [
+            {
+                "role": "system",
+                "content": f"{description}. Return only the number assigned to the correct answer. "
+                           "Don't provide the answer content"
+            }
+        ]
