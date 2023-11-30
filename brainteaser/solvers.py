@@ -2,8 +2,6 @@ import re
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from tqdm.auto import tqdm
-
 from structs import DataSet, Instance
 
 
@@ -13,6 +11,8 @@ class Solver(ABC):
             return self.solve_instance(x)
         if isinstance(x, DataSet):
             if show_progress:
+                from tqdm.auto import tqdm
+
                 return [self.solve_instance(i) for i in tqdm(x)]
             return [self.solve_instance(i) for i in x]
         raise TypeError("An input has to be an Instance or a DataSet")
@@ -38,9 +38,9 @@ class ZeroShotGPT(Solver):
         ]
 
     def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
-        content = "QUESTION:\n" + instance.question + "\n" + "\n".join(
-            [f"{i}) {choice}" for i, choice in enumerate(instance.choice_list)]
-        ) + "\nANSWER: "
+        content = "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
+            [f"{i}) {choice.strip()}" for i, choice in enumerate(instance.choice_list)]
+        ) + " ANSWER: "
         messages = self.messages + [
             {
                 "role": "user",
@@ -62,6 +62,57 @@ class ZeroShotGPT(Solver):
                 print("An error occurred during generating response. Retrying...")
                 return self.solve_instance(instance, retry_counter=retry_counter - 1)
             raise RuntimeError("The number of maximum retries has been reached.") from e
+
+
+class FineTunedGPT(ZeroShotGPT):
+    def __init__(self, model_name: str = "gpt-3.5-turbo"):
+        super().__init__(model_name=model_name)
+
+    def build_json(self, dataset: DataSet, path: str = "../data/fine-tuning.jsonl") -> None:
+        import json
+        from pathlib import Path
+
+        lines = []
+        for instance in dataset:
+            content = "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
+                [f"{i}) {choice.strip()}" for i, choice in enumerate(instance.choice_list)]
+            ) + " ANSWER: "
+            answer = instance.answer_idx
+            lines.append(
+                json.dumps(
+                    {
+                        "messages": self.messages +
+                                    [{"role": "user", "content": content}] +
+                                    [{"role": "assistant", "content": str(answer)}]
+                    }
+                )
+            )
+        with Path(path).open("wb") as fp:
+            for line in lines:
+                line += "\n"
+                line = str.encode(line)
+                fp.write(line)
+
+    def fit(self, dataset: DataSet, dataset_path: str = "../data/fine-tuning.jsonl") -> None:
+        from pathlib import Path
+
+        client = self.client_cls()
+
+        self.build_json(dataset, dataset_path)
+        with Path(dataset_path).open("rb") as fp:
+            response = client.files.create(
+                file=fp,
+                purpose="fine-tune"
+            )
+        training_file = response.id
+
+        client.fine_tuning.jobs.create(
+            training_file=training_file,
+            model=self.model_name,
+            hyperparameters={
+                "n_epochs": 1
+            }
+        )
 
 
 class ContextAwareZeroShotGPT(ZeroShotGPT):

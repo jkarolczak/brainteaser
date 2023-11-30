@@ -144,3 +144,13 @@ class DataSet:
 
     def __getitem__(self, item: int) -> TrainingInstance | Instance:
         return self.instances[item]
+
+    def difference(self, other: DataSet) -> DataSet:
+        other_questions = [instance.question.strip() for instance in other.instances]
+        new_instances = [instance for instance in self.instances if instance.question.strip() not in other_questions]
+        return DataSet.from_list(new_instances)
+
+    def add_answers(self, other: DataSet) -> DataSet:
+        self_questions = [instance.question.strip() for instance in self.instances]
+        new_instances = [instance for instance in other.instances if instance.question.strip() in self_questions]
+        return DataSet.from_list(new_instances)
