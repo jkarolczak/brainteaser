@@ -127,7 +127,7 @@ class DataSet:
         self._iter_idx = -1
         self._iter_instances = self.instances.copy()
         if self.shuffle:
-            rabdom.shuffle(self._iter_instances)
+            random.shuffle(self._iter_instances)
         return self
 
     def __next__(self) -> TrainingInstance | Instance:
