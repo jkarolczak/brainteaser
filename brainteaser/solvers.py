@@ -2,7 +2,10 @@ import re
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from structs import DataSet, Instance
+import numpy as np
+from scipy.spatial.distance import cosine
+
+from structs import DataSet, Instance, TrainingInstance
 
 
 class Solver(ABC):
@@ -37,14 +40,17 @@ class ZeroShotGPT(Solver):
             }
         ]
 
-    def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
-        content = "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
+    @staticmethod
+    def _format_question(instance: Instance) -> str:
+        return "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
             [f"{i}) {choice.strip()}" for i, choice in enumerate(instance.choice_list)]
         ) + " ANSWER: "
+
+    def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
         messages = self.messages + [
             {
                 "role": "user",
-                "content": content
+                "content": ZeroShotGPT._format_question(instance)
             }
         ]
 
@@ -74,9 +80,7 @@ class FineTunedGPT(ZeroShotGPT):
 
         lines = []
         for instance in dataset:
-            content = "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
-                [f"{i}) {choice.strip()}" for i, choice in enumerate(instance.choice_list)]
-            ) + " ANSWER: "
+            content = ZeroShotGPT._format_question(instance)
             answer = instance.answer_idx
             lines.append(
                 json.dumps(
@@ -138,3 +142,65 @@ class ContextAwareZeroShotGPT(ZeroShotGPT):
                            "Don't provide the answer content"
             }
         ]
+
+
+class InContextGPT(ZeroShotGPT):
+    class Context(Enum):
+        SENTENCE = "sentence"
+        WORD = "word"
+
+    def __init__(self, context: Context, model_name: str = "gpt-3.5-turbo", file_name: str | None = None):
+        super().__init__(model_name=model_name)
+
+        match context:
+            case self.Context.SENTENCE:
+                file_name = file_name or "../data/WP-train.pkl"
+            case self.Context.WORD:
+                file_name = file_name or "../data/WP-train.pkl"
+            case _:
+                raise ValueError("The context type has to be one of ContextAwareZeroshotGPT.Context")
+
+        self.dataset = DataSet.from_file(file_name)
+
+    def _find_nn(self, instance: Instance) -> TrainingInstance | None:
+        if not hasattr(instance, "embedding"):
+            instance.embed()
+        nn = (None, np.inf)
+        for neighbour in self.dataset:
+            distance = cosine(neighbour.embedding, instance.embedding)
+            if distance < nn[1]:
+                nn = (neighbour, distance)
+        return nn[0]
+
+    @staticmethod
+    def format_nn_as_example(instance: TrainingInstance) -> str:
+        return ZeroShotGPT._format_question(instance) + str(instance.answer_idx)
+
+    def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
+        example = InContextGPT.format_nn_as_example(self._find_nn(instance))
+        messages = [
+            {
+                "role": "system",
+                "content": "Solve the brain teaser. Return only the number assigned to the correct answer. Don't provide the "
+                           "answer content. Example: " + example
+            },
+            {
+                "role": "user",
+                "content": ZeroShotGPT._format_question(instance)
+            }
+        ]
+
+        try:
+            response = self.client_cls().chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
+            full_answer = response.choices[0].message.content
+            num_answer = int(re.compile(r"\d+").match(full_answer).group(0))
+
+            return num_answer
+        except Exception as e:
+            if retry_counter > 1:
+                print("An error occurred during generating response. Retrying...")
+                return self.solve_instance(instance, retry_counter=retry_counter - 1)
+            raise RuntimeError("The number of maximum retries has been reached.") from e
