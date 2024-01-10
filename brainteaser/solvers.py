@@ -41,7 +41,7 @@ class ZeroShotGPT(Solver):
         ]
 
     @staticmethod
-    def _format_question(instance: Instance) -> str:
+    def format_question(instance: Instance) -> str:
         return "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
             [f"{i}) {choice.strip()}" for i, choice in enumerate(instance.choice_list)]
         ) + " ANSWER: "
@@ -50,7 +50,7 @@ class ZeroShotGPT(Solver):
         messages = self.messages + [
             {
                 "role": "user",
-                "content": ZeroShotGPT._format_question(instance)
+                "content": ZeroShotGPT.format_question(instance)
             }
         ]
 
@@ -80,7 +80,7 @@ class FineTunedGPT(ZeroShotGPT):
 
         lines = []
         for instance in dataset:
-            content = ZeroShotGPT._format_question(instance)
+            content = ZeroShotGPT.format_question(instance)
             answer = instance.answer_idx
             lines.append(
                 json.dumps(
@@ -174,7 +174,7 @@ class InContextGPT(ZeroShotGPT):
 
     @staticmethod
     def format_nn_as_example(instance: TrainingInstance) -> str:
-        return ZeroShotGPT._format_question(instance) + str(instance.answer_idx)
+        return ZeroShotGPT.format_question(instance) + str(instance.answer_idx)
 
     def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
         example = InContextGPT.format_nn_as_example(self._find_nn(instance))
@@ -186,7 +186,98 @@ class InContextGPT(ZeroShotGPT):
             },
             {
                 "role": "user",
-                "content": ZeroShotGPT._format_question(instance)
+                "content": ZeroShotGPT.format_question(instance)
+            }
+        ]
+
+        try:
+            response = self.client_cls().chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
+            full_answer = response.choices[0].message.content
+            num_answer = int(re.compile(r"\d+").match(full_answer).group(0))
+
+            return num_answer
+        except Exception as e:
+            if retry_counter > 1:
+                print("An error occurred during generating response. Retrying...")
+                return self.solve_instance(instance, retry_counter=retry_counter - 1)
+            raise RuntimeError("The number of maximum retries has been reached.") from e
+
+
+class WordReasoningGPT:
+    def __init__(self, model_name: str = "gpt-3.5-turbo"):
+        super().__init__()
+        self.model_name = model_name
+        from openai import OpenAI
+
+        self.client_cls = OpenAI
+        self.messages = [
+            {
+                "role": "system",
+                "content": "Give a reasoning how the puzzle can be solved. Find the word that is the centric in the question "
+                           "in the context of given answers. Consider its meaning, spelling, pronunciation, and small words "
+                           "hidden in it. For instance 'c' can be 'see' or 'sea'. 'dress' is hidden in 'address'."
+                           " Give step by step reasoning."
+            }
+        ]
+
+    @staticmethod
+    def format_question(instance: Instance) -> str:
+        return "QUESTION: " + instance.question.strip() + " CHOICES: " + " ".join(
+            [f"{i}) {choice.strip()}" for i, choice in enumerate(instance.choice_list)]
+        )
+
+    def give_reasoning(self, instance: Instance, retry_counter: int = 3) -> str:
+        messages = self.messages + [
+            {
+                "role": "user",
+                "content": WordReasoningGPT.format_question(instance)
+            }
+        ]
+
+        try:
+            response = self.client_cls().chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            if retry_counter > 1:
+                print("An error occurred during generating response. Retrying...")
+                return self.give_reasoning(instance, retry_counter=retry_counter - 1)
+            raise RuntimeError("The number of maximum retries has been reached.") from e
+
+
+class ZeroShotWithReasoningGPT(Solver):
+    def __init__(self, model_name: str = "gpt-3.5-turbo"):
+        super().__init__()
+        self.model_name = model_name
+        from openai import OpenAI
+
+        self.client_cls = OpenAI
+        self.messages = [
+            {
+                "role": "system",
+                "content": "Solve the brain teaser. Return only the number assigned to the correct answer. "
+                           "Don't provide the answer content"
+            }
+        ]
+
+    def solve_instance(self, instance: Instance, retry_counter: int = 3) -> int:
+        messages = self.messages + [
+            {
+                "role": "user",
+                "content": WordReasoningGPT.format_question(instance)
+            },
+            {
+                "role": "assistant",
+                "content": WordReasoningGPT(self.model_name).give_reasoning(instance)
+            },
+            {
+                "role": "user",
+                "content": ZeroShotGPT.format_question(instance)
             }
         ]
 
