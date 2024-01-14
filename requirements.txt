@@ -4,7 +4,9 @@ dvc-azure
 jupyter
 numpy
 openai
+pillow
 scikit-learn
+streamlit
 tqdm
 wandb
 transformers
