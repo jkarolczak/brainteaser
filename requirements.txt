@@ -7,3 +7,4 @@ openai
 scikit-learn
 tqdm
 wandb
+transformers
