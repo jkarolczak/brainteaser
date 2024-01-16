@@ -154,16 +154,16 @@ class InContextGPT(ZeroShotGPT):
 
         match context:
             case self.Context.SENTENCE:
-                file_name = file_name or "../data/WP-train.pkl"
+                file_name = file_name or "../data/SP-train.pkl"
             case self.Context.WORD:
                 file_name = file_name or "../data/WP-train.pkl"
             case _:
-                raise ValueError("The context type has to be one of ContextAwareZeroshotGPT.Context")
+                raise ValueError("The context type has to be one of InContextGPT.Context")
 
         self.dataset = DataSet.from_file(file_name)
 
     def _find_nn(self, instance: Instance) -> TrainingInstance | None:
-        if not hasattr(instance, "embedding"):
+        if not hasattr(instance, "embedding") or not instance.embedding:
             instance.embed()
         nn = (None, np.inf)
         for neighbour in self.dataset:

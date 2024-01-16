@@ -2,14 +2,20 @@ from textwrap import dedent
 
 import streamlit as st
 
-from solvers import ZeroShotGPT
+from solvers import ZeroShotGPT, ZeroShotWithReasoningGPT, InContextGPT
 from structs import Instance
 
 solvers_dict = {
-    "vanilla gpt-3.5-turbo": ZeroShotGPT("gpt-3.5-turbo"),
-    "gpt-3.5-turbo for sentence puzzle": ZeroShotGPT("ft:gpt-3.5-turbo-0613:ncodex::8QhGOWvR"),
-    "gpt-3.5-turbo for word puzzle": ZeroShotGPT("ft:gpt-3.5-turbo-0613:ncodex::8R1R0Vi0"),
-    "vanilla gpt-4": ZeroShotGPT("gpt-4")
+    "Vanilla gpt-3.5-turbo": ZeroShotGPT("gpt-3.5-turbo"),
+    "One-Shot gpt-3.5-turbo for sentence puzzle": ZeroShotGPT("ft:gpt-3.5-turbo-0613:ncodex::8QhGOWvR"),
+    "One-Shot gpt-3.5-turbo for word puzzle": ZeroShotGPT("ft:gpt-3.5-turbo-0613:ncodex::8R1R0Vi0"),
+    "InContext gpt-3 for sentence puzzle": InContextGPT(InContextGPT.Context.SENTENCE, "gpt-3.5-turbo"),
+    "InContext gpt-3.5-turbo for word puzzle": InContextGPT(InContextGPT.Context.WORD, "gpt-3.5-turbo"),
+    "Reasoning gpt-3.5-turbo for word puzzle": ZeroShotWithReasoningGPT("gpt-4-1106-preview"),
+    "Vanilla gpt-4": ZeroShotGPT("gpt-4-1106-preview"),
+    "InContext gpt-4 for sentence puzzle": InContextGPT(InContextGPT.Context.SENTENCE, "gpt-4-1106-preview"),
+    "InContext gpt-4 for word puzzle": InContextGPT(InContextGPT.Context.WORD, "gpt-4-1106-preview"),
+    "Reasoning gpt-4 for word puzzle": ZeroShotWithReasoningGPT("gpt-4-1106-preview"),
 }
 
 
