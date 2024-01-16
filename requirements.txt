@@ -9,3 +9,4 @@ scikit-learn
 streamlit
 tqdm
 wandb
+transformers
